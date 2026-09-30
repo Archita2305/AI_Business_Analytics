@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+streamlit
+requests
+pydantic
+sqlalchemy
+psycopg2-binary
+python-dotenv
+langchain
+langchain-groq
+langgraph
+chromadb
+PyPDF2
+langchain-text-splitters
+redis

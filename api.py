@@ -32,7 +32,7 @@ def home():
 
 
 # Main analytics endpoint
-@app.post("/ask")
+@app.post("/ask", response_model=AnswerResponse)
 def ask(request: QuestionRequest):
 
     question = request.question
