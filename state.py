@@ -2,17 +2,34 @@ from typing import TypedDict
 from vector_db import retrieve_policy
 from langchain_groq import ChatGroq
 from sqlalchemy import create_engine, text
-from langgraph.graph import StateGraph,START,END
+from langgraph.graph import StateGraph, START, END
 from dotenv import load_dotenv
-from vector_db import retrieve_policy
+import os
+
+# Load environment variables from .env
 load_dotenv()
 
-llm= ChatGroq(model='openai/gpt-oss-120b',temperature=0)
+# Get Groq API key from .env
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-DATABASE_URL = "postgresql://postgres:Bhumi1234@localhost:5432/business_analytics1"
+if not GROQ_API_KEY:
+    raise ValueError("GROQ_API_KEY is not set")
 
+# Create LLM
+llm = ChatGroq(
+    model="openai/gpt-oss-120b",
+    temperature=0,
+    groq_api_key=GROQ_API_KEY
+)
+
+# Get database URL from .env
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError("DATABASE_URL is not set")
+
+# Create database engine
 engine = create_engine(DATABASE_URL)
-
 
 # StateGraph
 class AgentState(TypedDict):
