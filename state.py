@@ -36,12 +36,15 @@ class AgentState(TypedDict):
     question:str
     route:str
     sql:str
-    sql_result:str
+    sql_result:list
     analysis:str
     recommendation:str
     policy_content:str
     #next_agent:str
     final_answer:str
+    chart_type: str
+    chart_data: list
+    chart_title: str
 
 def supervisor(state: AgentState):
 
@@ -199,7 +202,7 @@ def sql_agent(state: AgentState):
 
         return {
             "sql": sql,
-            "sql_result": str(data)
+            "sql_result": data
         }
 
     except Exception as e:
@@ -340,6 +343,149 @@ def decision_agent(state: AgentState):
     return {
         "recommendation": response.content.strip()
     }
+
+def chart_agent(state: AgentState):
+    result = state.get("sql_result", [])
+    question = state.get("question", "").lower()
+
+    if not result or not isinstance(result, list):
+        return {
+            "chart_type": "",
+            "chart_data": [],
+            "chart_title": ""
+        }
+
+    first_row = result[0]
+
+    # SCATTER CHART
+    if "quantity" in first_row and "sales" in first_row:
+
+        scatter_words = [
+            "relationship",
+            "correlation",
+            "effect",
+            "impact",
+            "versus",
+            "vs",
+            "against",
+            "plot",
+            "scatter"
+        ]
+
+        if any(word in question for word in scatter_words):
+
+            chart_data = []
+
+            for row in result:
+                chart_data.append({
+                    "quantity": float(row["quantity"]),
+                    "sales": float(row["sales"])
+                })
+
+            return {
+                "chart_type": "scatter",
+                "chart_title": "Quantity vs Sales",
+                "chart_data": chart_data
+            }
+
+    # PIE CHART
+    category_column = None
+
+    for column in ["region", "product", "category", "customer"]:
+        if column in first_row:
+            category_column = column
+            break
+
+    value_column = None
+
+    for column in [
+        "total_sales",
+        "sales",
+        "total_profit",
+        "profit",
+        "total_quantity",
+        "quantity",
+        "count"
+    ]:
+        if column in first_row:
+            value_column = column
+            break
+
+    if category_column and value_column:
+
+        pie_words = [
+            "share",
+            "contribution",
+            "distribution",
+            "proportion",
+            "percentage",
+            "breakdown"
+        ]
+
+        if any(word in question for word in pie_words):
+
+            chart_data = []
+
+            for row in result:
+                chart_data.append({
+                    "category": str(row[category_column]),
+                    "value": float(row[value_column])
+                })
+
+            return {
+                "chart_type": "pie",
+                "chart_title": "Sales Distribution",
+                "chart_data": chart_data
+            }
+
+    # LINE CHART
+    if "order_date" in first_row and value_column:
+
+        if any(word in question for word in [
+            "trend",
+            "over time",
+            "daily",
+            "monthly",
+            "weekly",
+            "growth"
+        ]):
+
+            chart_data = []
+
+            for row in result:
+                chart_data.append({
+                    "date": str(row["order_date"]),
+                    "value": float(row[value_column])
+                })
+
+            return {
+                "chart_type": "line",
+                "chart_title": "Sales Trend",
+                "chart_data": chart_data
+            }
+
+    # BAR CHART
+    if category_column and value_column:
+
+        chart_data = []
+
+        for row in result:
+            chart_data.append({
+                "category": str(row[category_column]),
+                "value": float(row[value_column])
+            })
+
+        return {
+            "chart_type": "bar",
+            "chart_title": "Business Comparison",
+            "chart_data": chart_data
+        }
+
+    return {
+        "chart_type": "",
+        "chart_data": [],
+        "chart_title": ""
+    }
 # Now we need something that decides which agent should run.
 
 
@@ -360,7 +506,7 @@ def route_after_analytics(state: AgentState):
     if state["route"] == "SQL_RAG":
         return "rag"
 
-    return "final"
+    return "chart"
 
 def route_after_rag(state: AgentState):
 
@@ -403,6 +549,7 @@ graph.add_node("analytics", analytics_agent)
 graph.add_node("rag", rag_agent)
 graph.add_node("policy_answer", policy_answer_agent)
 graph.add_node("decision", decision_agent)
+graph.add_node("chart", chart_agent)
 graph.add_node("final_answer", final_answer)
 
 
@@ -439,7 +586,7 @@ graph.add_conditional_edges(
     route_after_analytics,
     {
         "rag": "rag",
-        "final": "final_answer"
+        "chart":"chart"
     }
 )
 
@@ -459,6 +606,9 @@ graph.add_edge("policy_answer","final_answer")
 # Decision → Final
 graph.add_edge("decision", "final_answer")
 
+#Chart- Final
+graph.add_edge("chart", "final_answer")
+
 
 # Final → END
 graph.add_edge("final_answer", END)
@@ -473,10 +623,11 @@ agent = graph.compile()
 # We dont want to see raw outputs from the above agents.
 
 
-question = "Can we offer a 20% discount to the lowest-performing region?"
+question = "Show me sales from each region?"
 
 result = agent.invoke({
     "question": question
 })
 
 print(result["final_answer"])
+

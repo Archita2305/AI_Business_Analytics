@@ -2,7 +2,7 @@ from redis_client import redis_client
 from fastapi import FastAPI
 from pydantic import BaseModel
 from state import agent
-
+import json
 
 
 # Create FastAPI application
@@ -21,7 +21,9 @@ class QuestionRequest(BaseModel):
 # Response model
 class AnswerResponse(BaseModel):
     answer: str
-
+    chart_type: str = ""
+    chart_title: str = ""
+    chart_data: list = []
 
 # Test endpoint
 @app.get("/")
@@ -32,37 +34,32 @@ def home():
 
 
 # Main analytics endpoint
-@app.post("/ask", response_model=AnswerResponse)
-def ask(request: QuestionRequest):
+@app.post("/ask")
+def ask_question(request: QuestionRequest):
 
     question = request.question
-
     cache_key = f"cache:{question}"
 
-    # Check Redis
-    cached_answer = redis_client.get(cache_key)
+    cached_data = redis_client.get(cache_key)
 
-    if cached_answer:
-        return {
-            "answer": cached_answer,
-            "source": "redis"
-        }
+    if cached_data:
+        return json.loads(cached_data)
 
-    # Run LangGraph
     result = agent.invoke({
         "question": question
     })
 
-    answer = result["final_answer"]
+    response_data = {
+        "answer": result["final_answer"],
+        "chart_type": result.get("chart_type", ""),
+        "chart_title": result.get("chart_title", ""),
+        "chart_data": result.get("chart_data", [])
+    }
 
-    # Store answer in Redis for 1 hour
     redis_client.set(
         cache_key,
-        answer,
+        json.dumps(response_data),
         ex=3600
     )
 
-    return {
-        "answer": answer,
-        "source": "agent"
-    }
+    return response_data
